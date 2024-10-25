@@ -1,0 +1,130 @@
+---
+sidebar_position: 2
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# 如何使自动高度支持动画（折叠动画）
+
+前段时间，一个简单的问题让我犯了难：
+
+如何让一个元素的高度在 零高度（ `height: 0` ）和自动高度（ `height: auto` ）之间切换的时候能显示出折叠的过渡动画？
+
+## 0. 直接使用 `transition` 为什么不行？
+
+原因很简单，动画是数值的变化，而 `auto` 是一个关键字，不是一个数值，要怎么产生过渡效果呢。
+
+```mdx-code-block
+<Tabs>
+<TabItem value="Demo0.tsx">
+```
+
+```js
+import { useState } from "react";
+
+export default () => {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div style={{ padding: 10, backgroundColor: "lightgray", borderRadius: 5 }}>
+      <button onClick={() => setOpen(!open)}>Toggle</button>
+      <div
+        // highlight-start
+        style={{
+          transition: "height 0.3s ease",
+          overflow: "hidden",
+          height: open ? "auto" : 0,
+        }}
+        // highlight-end
+      >
+        Lorem, ipsum dolor sit amet consectetur adipisicing elit. Ex repellendus
+        sint iste at possimus quibusdam iusto accusantium et, itaque explicabo
+        laboriosam neque minima deleniti labore expedita magnam sequi dolorum,
+        debitis modi nulla. Aliquid ipsum laudantium consectetur labore? Ex,
+        fuga inventore quas vitae aliquam aliquid modi aspernatur quis est
+        nesciunt molestiae.
+      </div>
+    </div>
+  );
+};
+```
+
+```mdx-code-block
+</TabItem>
+</Tabs>
+```
+
+**效果演示**
+
+不支持动画效果。
+
+import Demo0 from "./Demo0";
+
+<Demo0 />
+
+## 1. `interpolate-size: allow-keywords`
+
+这是**最简单的解法**，`transition` + `height: auto` 的做法由于 `auto` 是关键字而非数值因此无法实现动画，但 `calc-size` 和 `interpolate-size` 的出现改变了这一切。
+
+- `calc-size` : 用法与 `calc` 类似，可以把 `auto` 等关键字当作数值来计算。
+- `interpolate-size` : 默认值是 `numeric-only`，只允许数值产生过渡效果，但是当设置为 `allow-keywords`，就可以用关键字产生过渡效果了。
+
+考虑到兼容性，建议使用 `interpolate-size: allow-keywords`，这样就算浏览器不支持，也只是没有动画效果，不会影响其他功能。
+
+**代码示例**
+
+```mdx-code-block
+<Tabs>
+<TabItem value="Demo1.tsx">
+```
+
+```js
+import { useState } from "react";
+
+export default () => {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div style={{padding: 10, backgroundColor: "lightgray", borderRadius: 5}}>
+      <button onClick={() => setOpen(!open)}>Toggle</button>
+      <div
+        style={{
+          // highlight-start
+          interpolateSize: "allow-keywords",
+          // highlight-end
+          transition: "height 0.3s ease",
+          overflow: "hidden",
+          height: open ? "auto" : 0,
+        }}
+      >
+        Lorem, ipsum dolor sit amet consectetur adipisicing elit. Ex repellendus
+        sint iste at possimus quibusdam iusto accusantium et, itaque explicabo
+        laboriosam neque minima deleniti labore expedita magnam sequi dolorum,
+        debitis modi nulla. Aliquid ipsum laudantium consectetur labore? Ex,
+        fuga inventore quas vitae aliquam aliquid modi aspernatur quis est
+        nesciunt molestiae.
+      </div>
+    </div>
+  );
+};
+```
+
+```mdx-code-block
+</TabItem>
+</Tabs>
+```
+
+**效果演示**
+
+import Demo1 from "./Demo1";
+
+<Demo1 />
+
+<br />
+
+显然，在不考虑兼容性、确保浏览器一定支持的情况下，这是最简单的解决方案，只要一行代码，而且由于 `interpolate-size` 是一个可继承的属性，所以完全可以**直接在根元素上设置**，全局生效。
+
+当然，这一方案的缺点就是**兼容性**，比如Chrome浏览器是从129版本才开始支持的，使用时一定要确认目标浏览器是否支持。
+
+如果你需要考虑兼容性，那么就需要使用下面的方法。
