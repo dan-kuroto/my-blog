@@ -5,22 +5,28 @@ sidebar_position: 2
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-# 如何使自动高度支持动画（折叠动画）
+# 如何实现高度自动的过渡动画
 
-前段时间，一个简单的问题让我犯了难：
+前段时间，一个看似简单的问题让我犯了难：
 
-如何让一个元素的高度在 零高度（ `height: 0` ）和自动高度（ `height: auto` ）之间切换的时候能显示出折叠的过渡动画？
+如何让一个元素在零高度和自动高度之间切换的时候能显示出过渡动画（即折叠动画）？能不能用纯CSS来实现？
 
-## 0. 直接使用 `transition` 为什么不行？
+:::tip
+本文中的代码采用了react hooks写法，但这只是为了节省篇幅（代码量），这个问题与react无关，其他框架或者原生html+css+js都是一个道理。
+:::
+
+## 0. 直接使用 `height: auto` 为什么不行？
 
 原因很简单，动画是数值的变化，而 `auto` 是一个关键字，不是一个数值，要怎么产生过渡效果呢。
+
+### 代码示例
 
 ```mdx-code-block
 <Tabs>
 <TabItem value="Demo0.tsx">
 ```
 
-```js
+```tsx
 import { useState } from "react";
 
 export default () => {
@@ -55,7 +61,7 @@ export default () => {
 </Tabs>
 ```
 
-**效果演示**
+### 效果演示
 
 不支持动画效果。
 
@@ -72,14 +78,16 @@ import Demo0 from "./Demo0";
 
 考虑到兼容性，建议使用 `interpolate-size: allow-keywords`，这样就算浏览器不支持，也只是没有动画效果，不会影响其他功能。
 
-**代码示例**
+### 代码示例
+
+> 由于这里使用了 jsx 语法，所以 `interpolate-size` 需要写成小驼峰形式 `interpolateSize`，如果是纯 css 则不需要这样。
 
 ```mdx-code-block
 <Tabs>
 <TabItem value="Demo1.tsx">
 ```
 
-```js
+```tsx
 import { useState } from "react";
 
 export default () => {
@@ -115,7 +123,7 @@ export default () => {
 </Tabs>
 ```
 
-**效果演示**
+### 效果演示
 
 import Demo1 from "./Demo1";
 
@@ -125,6 +133,296 @@ import Demo1 from "./Demo1";
 
 显然，在不考虑兼容性、确保浏览器一定支持的情况下，这是最简单的解决方案，只要一行代码，而且由于 `interpolate-size` 是一个可继承的属性，所以完全可以**直接在根元素上设置**，全局生效。
 
-当然，这一方案的缺点就是**兼容性**，比如Chrome浏览器是从129版本才开始支持的，使用时一定要确认目标浏览器是否支持。
+当然，这一方案的缺点就是**兼容性**，比如Chrome浏览器是从**129版本**才开始支持的，使用时一定要确认目标浏览器是否支持。
 
-如果你需要考虑兼容性，那么就需要使用下面的方法。
+如果你想要更好的兼容性，那么可以考虑下面的方法。
+
+## 2. `grid-template-rows`
+
+这种方法放弃了 `height` 属性，而是使用 `grid` 布局的 `fr` 单位来实现。
+
+单位 `fr` 定义了网格轨道大小的弹性系数，因此通过 `grid-template-rows: {number}fr` 就可以避免 `auto` 这种关键字，支持过渡了。
+
+:::warning
+- 零高度时不能写成 `0`、`0px`、`0%` 等形式，必须写 `0fr`
+- 必须要对子元素设置 `min-height: 0`，否则 `0fr` 时高度由 grid 最小尺寸决定，无法实现折叠效果。
+:::
+
+### 代码示例
+
+```mdx-code-block
+<Tabs>
+<TabItem value="Demo2.tsx">
+```
+
+```tsx
+import { useState } from "react";
+
+export default () => {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div style={{ padding: 10, backgroundColor: "lightgray", borderRadius: 5 }}>
+      <button onClick={() => setOpen(!open)}>Toggle</button>
+      <div
+        style={{
+          transition: "grid-template-rows 0.3s ease",
+          overflow: "hidden",
+          // highlight-start
+          display: "grid",
+          gridTemplateRows: open ? "1fr" : "0fr",
+          // highlight-end
+        }}
+      >
+        // highlight-start
+        <div style={{ minHeight: 0 }}>
+        // highlight-end
+          Lorem, ipsum dolor sit amet consectetur adipisicing elit. Ex
+          repellendus sint iste at possimus quibusdam iusto accusantium et,
+          itaque explicabo laboriosam neque minima deleniti labore expedita
+          magnam sequi dolorum, debitis modi nulla. Aliquid ipsum laudantium
+          consectetur labore? Ex, fuga inventore quas vitae aliquam aliquid modi
+          aspernatur quis est nesciunt molestiae.
+        </div>
+      </div>
+    </div>
+  );
+};
+```
+
+```mdx-code-block
+</TabItem>
+</Tabs>
+```
+### 效果演示
+
+import Demo2 from './Demo2';
+
+<Demo2 />
+
+<br />
+
+这个方案比起 `interpolate-size` 的兼容性高一些，但仍需要**chrome版本>=107**。
+
+## 3. `transform: scaleY`
+
+这也是纯CSS的解决方案，与前两种方案相比**兼容性好**，但有两个大问题：
+
+- 在**高度变化时，元素的内容也会被缩放，导致内容变形**（看起来不像是收起效果，倒像是日历那种立体翻转的效果）
+- 不会真正改变元素的高度，只是视觉上的变化，所以**元素的高度在变化时，会占据原来的空间**
+
+### 代码示例
+
+> `transform-origin: top` 是为了让元素从顶部开始收起，否则默认是从中间收起。
+
+```mdx-code-block
+<Tabs>
+<TabItem value="Demo3.tsx">
+```
+
+```tsx
+import { useState } from "react";
+
+export default () => {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div style={{ padding: 10, backgroundColor: "lightgray", borderRadius: 5 }}>
+      <button onClick={() => setOpen(!open)}>Toggle</button>
+      <div
+        style={{
+          transition: "transform 0.3s ease",
+          overflow: "hidden",
+          // highlight-start
+          transform: open ? "scaleY(1)" : "scaleY(0)",
+          transformOrigin: "top",
+          // highlight-end
+        }}
+      >
+        Lorem, ipsum dolor sit amet consectetur adipisicing elit. Ex repellendus
+        sint iste at possimus quibusdam iusto accusantium et, itaque explicabo
+        laboriosam neque minima deleniti labore expedita magnam sequi dolorum,
+        debitis modi nulla. Aliquid ipsum laudantium consectetur labore? Ex,
+        fuga inventore quas vitae aliquam aliquid modi aspernatur quis est
+        nesciunt molestiae.
+      </div>
+    </div>
+  );
+};
+```
+
+```mdx-code-block
+</TabItem>
+</Tabs>
+```
+
+### 效果演示
+
+虽然产生了收起的动画效果，但内容有变形、且收起后留下了一块空白区域（因为元素的高度并没有真正变化）。
+
+import Demo3 from './Demo3';
+
+<Demo3 />
+
+## 4. `max-height`
+
+这个方案和 `transform` 方案类似，也是 纯CSS、兼容性好，但是会有一些问题。
+
+简单来说，收起时设置 `max-height: 0`，展开时设置 `max-height: 1000px`（一个足够大的值），这样就可以实现收起展开的效果，相比上一个方案，内容不会变形、也是真正地改变了元素的高度，但带来了新的问题：
+
+展开时 `max-height` 要设置一个足够大的值，但多大算“足够大”呢？这个值肯定不能设小了，但如果你想一劳永逸，设置一个 `9999999px` 之类的，那确实“足够大”了，但别忘了，这种方案下过渡动画是由 `max-height` 控制的——
+
+我们把 `max-height` 在过渡动画过程中分为三个时期：
+
+- 大于等于真实高度（对元素显示高度无影响）
+- 小于真实高度（影响元素的显示高度）
+- 零（元素隐藏）
+
+如果 `max-height` 的值太大，那么就会有一个很长的时间段，处在“大于等于真实高度”这一时期，在用户看来，这个时候动画是停滞的，直到进入了“小于真实高度”时期，动画才会继续进行。
+
+也就是说，**动画的开始或结束是有停顿时间的**，这个停顿的时间取决于 `max-height` 的值，这个值不能太大，也不能太小，要根据实际情况来调整，这就是这个方案的缺点。
+
+### 代码示例
+
+```mdx-code-block
+<Tabs>
+<TabItem value="Demo4.tsx">
+```
+
+```tsx
+import { useState } from "react";
+
+export default () => {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div style={{ padding: 10, backgroundColor: "lightgray", borderRadius: 5 }}>
+      <button onClick={() => setOpen(!open)}>Toggle</button>
+      <div
+        style={{
+          transition: "max-height 0.3s ease",
+          overflow: "hidden",
+          // highlight-start
+          maxHeight: open ? 1000 : 0,
+          // highlight-end
+        }}
+      >
+        Lorem, ipsum dolor sit amet consectetur adipisicing elit. Ex repellendus
+        sint iste at possimus quibusdam iusto accusantium et, itaque explicabo
+        laboriosam neque minima deleniti labore expedita magnam sequi dolorum,
+        debitis modi nulla. Aliquid ipsum laudantium consectetur labore? Ex,
+        fuga inventore quas vitae aliquam aliquid modi aspernatur quis est
+        nesciunt molestiae.
+      </div>
+    </div>
+  );
+};
+```
+
+```mdx-code-block
+</TabItem>
+</Tabs>
+```
+
+### 效果演示
+
+能明显感觉到收起动画开始时有延迟，展开动画则是速度很快（因为结束后停顿时间的存在使实际的高度变化时间被挤压得更短了）。
+
+import Demo4 from './Demo4';
+
+<Demo4 />
+
+## 5. 放弃纯 css，用 js 辅助实现
+
+最传统、最直接、兼容性好、视觉效果无缺陷的最终解决方案：
+
+**放弃“纯CSS实现”的坚持，用js来实现。**
+
+这个方案的缺点：
+
+- 需要用 JS 获取元素的真实高度，这会导致一次 reflow
+  - 但这个场景下，仅仅是在收起或展开的时候触发一次，对性能的影响可以说微乎其微
+- 实现起来稍微麻烦一点
+  - 不过其实也没多几行代码
+- ~~放弃了“纯CSS实现”的坚持，对我这个强迫症来说太屈辱了~~
+  - 话虽如此，我最后用的还是这个方案，因为公司项目是运行在小程序上的 `Taro` 项目，在保证视觉效果的前提下，这个方案确实是兼容性最好的……
+
+### 代码示例
+
+:::tip
+- 这里使用了 `useRef` 来获取元素的真实高度，当然也可以用 `document.getElementById` 等方法。
+- 如果内容的高度是动态变化的，可以用 `ResizeObserver` 来监听高度变化。这里为了简单，就默认内容高度不变了。
+:::
+
+```mdx-code-block
+<Tabs>
+<TabItem value="Demo5.tsx">
+```
+
+```tsx
+import { useEffect, useRef, useState } from "react";
+
+export default () => {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const open = useRef(true);
+  const [height, setHeight] = useState<number>();
+
+  const handleToggle = () => {
+    if (open.current) {
+      setHeight(0);
+    } else if (wrapperRef.current) {
+      // highlight-start
+      // 设置外部容器高度为内容高度
+      const rect = wrapperRef.current.getBoundingClientRect();
+      setHeight(rect.height);
+      // highlight-end
+    }
+    open.current = !open.current;
+  };
+
+  useEffect(() => {
+    if (!wrapperRef.current) {
+      return;
+    }
+    // highlight-start
+    // 初始化时获取一下内容高度，否则第一次点击收起的时候没有动画效果（如果愿意初始为收起状态，设置高度初值为0也可）
+    const rect = wrapperRef.current.getBoundingClientRect();
+    setHeight(rect.height);
+    // highlight-end
+  }, []);
+
+  return (
+    <div style={{ padding: 10, backgroundColor: "lightgray", borderRadius: 5 }}>
+      <button onClick={handleToggle}>Toggle</button>
+      <div
+        style={{
+          transition: "height 0.3s ease",
+          overflow: "hidden",
+          // highlight-next-line
+          height: height,
+        }}
+      >
+        <div ref={wrapperRef}>
+          Lorem, ipsum dolor sit amet consectetur adipisicing elit. Ex
+          repellendus sint iste at possimus quibusdam iusto accusantium et,
+          itaque explicabo laboriosam neque minima deleniti labore expedita
+          magnam sequi dolorum, debitis modi nulla. Aliquid ipsum laudantium
+          consectetur labore? Ex, fuga inventore quas vitae aliquam aliquid modi
+          aspernatur quis est nesciunt molestiae.
+        </div>
+      </div>
+    </div>
+  );
+};
+```
+
+```mdx-code-block
+</TabItem>
+</Tabs>
+```
+
+### 效果演示
+
+import Demo5 from './Demo5';
+
+<Demo5 />
